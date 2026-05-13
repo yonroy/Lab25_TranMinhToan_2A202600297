@@ -42,6 +42,19 @@ class RunMetrics(BaseModel):
     def percentile(self, q: float) -> float:
         return percentile(self.latencies_ms, q)
 
+    def evaluate_slos(self) -> dict[str, str]:
+        """Evaluate predefined SLO targets and return pass/fail per SLI."""
+        results: dict[str, str] = {}
+        results["availability_gte_99pct"] = "pass" if self.availability >= 0.99 else "fail"
+        results["latency_p95_lt_2500ms"] = "pass" if self.percentile(95) < 2500 else "fail"
+        results["fallback_success_rate_gte_95pct"] = "pass" if self.fallback_success_rate >= 0.95 else "fail"
+        results["cache_hit_rate_gte_10pct"] = "pass" if self.cache_hit_rate >= 0.10 else "fail"
+        if self.recovery_time_ms is not None:
+            results["recovery_time_lt_5000ms"] = "pass" if self.recovery_time_ms < 5000 else "fail"
+        else:
+            results["recovery_time_lt_5000ms"] = "n/a"
+        return results
+
     def to_report_dict(self) -> dict[str, object]:
         return {
             "total_requests": self.total_requests,
@@ -57,6 +70,7 @@ class RunMetrics(BaseModel):
             "estimated_cost": round(self.estimated_cost, 6),
             "estimated_cost_saved": round(self.estimated_cost_saved, 6),
             "scenarios": self.scenarios,
+            "slo_results": self.evaluate_slos(),
         }
 
     def write_json(self, path: str | Path) -> None:
@@ -69,7 +83,7 @@ def percentile(values: Iterable[float], q: float) -> float:
     if not values_sorted:
         return 0.0
     if q == 50:
-        return float(median(values_sorted))
+        return median(values_sorted)
     k = (len(values_sorted) - 1) * q / 100
     lower = int(k)
     upper = min(lower + 1, len(values_sorted) - 1)

@@ -53,6 +53,7 @@ class ResponseCache:
         self.ttl_seconds = ttl_seconds
         self.similarity_threshold = similarity_threshold
         self._entries: list[CacheEntry] = []
+        self.hit_log: list[dict[str, object]] = []  # all cache hits with similarity score
 
     def get(self, query: str) -> tuple[str | None, float]:
         if _is_uncacheable(query):
@@ -70,7 +71,9 @@ class ResponseCache:
                 best_key = entry.key
         if best_score >= self.similarity_threshold and best_key is not None:
             if _looks_like_false_hit(query, best_key):
+                self.hit_log.append({"query": query, "cached_key": best_key, "score": best_score, "type": "false_hit"})
                 return None, best_score
+            self.hit_log.append({"query": query, "cached_key": best_key, "score": best_score, "type": "hit"})
             return best_value, best_score
         return None, best_score
 
@@ -139,6 +142,8 @@ class SharedRedisCache:
         self.prefix = prefix
         self.false_hit_log: list[dict[str, object]] = []
         self._redis: Any = redis_lib.Redis.from_url(redis_url, decode_responses=True)
+        # In-memory fallback used automatically when Redis is unavailable
+        self._fallback = ResponseCache(ttl_seconds, similarity_threshold)
 
     def ping(self) -> bool:
         """Check Redis connectivity."""
@@ -182,7 +187,8 @@ class SharedRedisCache:
 
             return None, best_score
         except Exception:
-            return None, 0.0
+            # Redis unavailable — degrade gracefully to in-memory fallback
+            return self._fallback.get(query)
 
     def set(self, query: str, value: str, metadata: dict[str, str] | None = None) -> None:
         """Store a response in Redis with TTL."""
@@ -196,7 +202,8 @@ class SharedRedisCache:
             self._redis.hset(key, mapping=mapping)
             self._redis.expire(key, self.ttl_seconds)
         except Exception:
-            pass
+            # Redis unavailable — degrade gracefully to in-memory fallback
+            self._fallback.set(query, value, metadata)
 
     def flush(self) -> None:
         """Remove all entries with this cache prefix (for testing)."""

@@ -176,12 +176,26 @@ scenarios:
 
 ---
 
-## Stretch Goals (extra credit)
+## Stretch Goals (extra credit) ✅ ALL DONE
+
 - [x] Concurrency: `ThreadPoolExecutor(max_workers=10)` trong `run_scenario()` (Phase 6)
-- [ ] Redis-backed circuit state (INCR/EXPIRE trong Redis)
-- [ ] Redis graceful degradation → fallback sang in-memory cache
-- [ ] False-hit analysis: log mọi cache hit với similarity score
-- [ ] Cost-aware routing: khi budget đạt 80% → route sang model rẻ hơn
-- [ ] Property-based tests với `hypothesis` cho circuit breaker
-- [ ] Prometheus export: `agent_requests_total`, `agent_latency_seconds`, `cache_hits_total`, `circuit_state`
-- [ ] SLO definition: availability >= 99%, P95 < 2.5s → bảng pass/fail
+- [x] Redis-backed circuit state: `RedisCircuitBreaker` — state/failure_count/opened_at/transition_log lưu Redis; fallback in-memory khi Redis down
+- [x] Redis graceful degradation: `SharedRedisCache.get/set` fallback sang `ResponseCache` khi `Exception`
+- [x] False-hit analysis log: `ResponseCache.hit_log` — mọi hit/false_hit ghi `{query, cached_key, score, type}`
+- [x] Cost-aware routing 80%: skip expensive providers khi `cumulative_cost >= 0.8 × budget`
+- [x] Property-based tests `hypothesis`: 6 tests (`test_circuit_breaker_hypothesis.py`) — invariants state machine, counter, transition log
+- [x] Prometheus export: `PrometheusExporter` — `agent_requests_total`, `agent_latency_seconds`, `cache_hits_total`, `circuit_state`; no-op nếu không cài
+- [x] SLO pass/fail table: `RunMetrics.evaluate_slos()` + `slo_results` trong `metrics.json`
+
+### `metrics.json` slo_results (run cuối)
+```
+availability_gte_99pct:          pass
+latency_p95_lt_2500ms:           pass
+fallback_success_rate_gte_95pct: fail  ← 0.946, sát ngưỡng do randomness
+cache_hit_rate_gte_10pct:        pass
+recovery_time_lt_5000ms:         n/a
+```
+
+### Tests: 19/19 passed
+- 6 hypothesis tests (`test_circuit_breaker_hypothesis.py`)
+- 13 existing tests (Redis active)

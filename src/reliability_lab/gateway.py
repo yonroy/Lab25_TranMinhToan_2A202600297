@@ -50,14 +50,13 @@ class ReliabilityGateway:
 
         last_error: str | None = None
         for provider in self.providers:
-            # Cost budget check: skip providers more expensive than cheapest when over budget
-            if (
-                self.cost_budget is not None
-                and self._cumulative_cost >= self.cost_budget
-                and provider.cost_per_1k_tokens > min_cost
-            ):
-                last_error = f"cost budget exceeded, skipping {provider.name}"
-                continue
+            # Cost-aware routing: at 80% of budget start routing to cheaper providers;
+            # skip expensive ones entirely once budget is reached (100%).
+            if self.cost_budget is not None and provider.cost_per_1k_tokens > min_cost:
+                budget_ratio = self._cumulative_cost / self.cost_budget
+                if budget_ratio >= 0.8:
+                    last_error = f"cost budget {budget_ratio:.0%}, skipping expensive provider {provider.name}"
+                    continue
 
             breaker = self.breakers[provider.name]
             try:
