@@ -44,7 +44,7 @@ scenarios:             primary_timeout_100: pass, primary_flaky_50: pass, all_he
 
 ### Kiểm tra
 - [x] `make test` — `test_gateway_contract` pass (6 passed, 1 xfailed)
-- [ ] `make run-chaos` — kiểm tra `metrics.json` có `circuit_open_count > 0`
+- [x] `make run-chaos` — `circuit_open_count: 5` ✅ (verified in Phase 6 metrics)
 - [x] Viết test bổ sung: `test_circuit_opens_and_backup_serves` — force primary fail 3 lần → circuit OPEN → backup phục vụ
 
 ---
@@ -177,7 +177,7 @@ scenarios:
 ---
 
 ## Stretch Goals (extra credit)
-- [ ] Concurrency: `ThreadPoolExecutor` trong `run_simulation`
+- [x] Concurrency: `ThreadPoolExecutor(max_workers=10)` trong `run_scenario()` (Phase 6)
 - [ ] Redis-backed circuit state (INCR/EXPIRE trong Redis)
 - [ ] Redis graceful degradation → fallback sang in-memory cache
 - [ ] False-hit analysis: log mọi cache hit với similarity score
