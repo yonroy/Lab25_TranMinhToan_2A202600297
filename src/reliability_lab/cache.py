@@ -55,8 +55,11 @@ class ResponseCache:
         self._entries: list[CacheEntry] = []
 
     def get(self, query: str) -> tuple[str | None, float]:
+        if _is_uncacheable(query):
+            return None, 0.0
         best_value: str | None = None
         best_score = 0.0
+        best_key: str | None = None
         now = time.time()
         self._entries = [e for e in self._entries if now - e.created_at <= self.ttl_seconds]
         for entry in self._entries:
@@ -64,24 +67,36 @@ class ResponseCache:
             if score > best_score:
                 best_score = score
                 best_value = entry.value
-        if best_score >= self.similarity_threshold:
+                best_key = entry.key
+        if best_score >= self.similarity_threshold and best_key is not None:
+            if _looks_like_false_hit(query, best_key):
+                return None, best_score
             return best_value, best_score
         return None, best_score
 
     def set(self, query: str, value: str, metadata: dict[str, str] | None = None) -> None:
+        if _is_uncacheable(query):
+            return
         self._entries.append(CacheEntry(query, value, time.time(), metadata or {}))
 
     @staticmethod
     def similarity(a: str, b: str) -> float:
-        """Very small baseline similarity using token overlap.
+        """Character trigram Jaccard similarity with exact-match fast path."""
+        a_norm = a.lower().strip()
+        b_norm = b.lower().strip()
+        if a_norm == b_norm:
+            return 1.0
 
-        TODO(student): Improve with embeddings or a deterministic vectorizer.
-        """
-        left = set(a.lower().split())
-        right = set(b.lower().split())
-        if not left or not right:
+        def _trigrams(s: str) -> set[str]:
+            padded = f"  {s}  "
+            return {padded[i : i + 3] for i in range(len(padded) - 2)}
+
+        a_grams = _trigrams(a_norm)
+        b_grams = _trigrams(b_norm)
+        union = a_grams | b_grams
+        if not union:
             return 0.0
-        return len(left & right) / len(left | right)
+        return len(a_grams & b_grams) / len(union)
 
 
 # ---------------------------------------------------------------------------

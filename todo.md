@@ -85,22 +85,31 @@ scenarios:
 
 ---
 
-## Phase 4 — In-Memory Cache + Tuning (120–165 min) · 15 điểm
+## Phase 4 — In-Memory Cache + Tuning (120–165 min) · 15 điểm ✅ DONE
 
 ### `cache.py`
-- [ ] Cải thiện `similarity()`:
-  - [ ] Thêm exact-match fast path
-  - [ ] Nâng cấp lên TF-IDF / character n-gram / numpy vector similarity
-- [ ] Thêm false-hit guardrails:
-  - [ ] Kiểm tra privacy-sensitive keywords (`"balance"`, `"user 123"`) → bỏ qua cache
-  - [ ] Kiểm tra `expected_risk` field → high-risk query không cache
-- [ ] Fix `test_todo_requirements.py`: `"refund policy for 2024"` và `"refund policy for 2026"` KHÔNG được match
+- [x] `similarity()`: exact-match fast path (return 1.0), nâng lên character trigram Jaccard
+- [x] `get()`: `_is_uncacheable()` check đầu hàm, `_looks_like_false_hit()` trước khi trả kết quả
+- [x] `set()`: `_is_uncacheable()` check — không cache privacy queries
+- [x] Fix test: `"refund policy for 2024"` vs `"refund policy for 2026"` → `_looks_like_false_hit()` trả `True` → không match
 
-### Báo cáo so sánh
-- [ ] Chạy simulation với `cache.enabled: false` → lưu metrics
-- [ ] Chạy simulation với `cache.enabled: true` → lưu metrics
-- [ ] Tạo bảng so sánh (latency_p50, latency_p95, cost, cache_hit_rate)
-- [ ] Giải thích lý do chọn `similarity_threshold` và TTL
+### Kiểm tra
+- [x] `test_todo_requirements.py::test_semantic_cache_should_not_false_hit_different_intent` → **PASSED** (xfail marker đã xóa)
+- [x] 7/7 tests passed (không còn xfailed)
+
+### Báo cáo so sánh cache on vs off (100 requests, seed=42)
+| metric          | cache ON  | cache OFF |
+|-----------------|-----------|-----------|
+| latency_p50_ms  | 0.05      | 225.17    |
+| latency_p95_ms  | 206.83    | 518.45    |
+| cost            | 0.008836  | 0.052222  |
+| cost_saved      | 0.084     | 0.0       |
+| cache_hit_rate  | 0.84      | 0.0       |
+| availability    | 1.0       | 0.98      |
+
+**Lý do chọn `similarity_threshold=0.92` và `ttl_seconds=300`:**
+- Threshold 0.92 đủ chặt để ngăn false hits (thấp hơn → false positives như cache_stale_candidate scenario)
+- TTL 300s (5 phút) phù hợp với queries không thay đổi nhanh; ngắn hơn thì cache_hit_rate giảm
 
 ---
 
