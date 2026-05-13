@@ -34,3 +34,7 @@ scenarios:
   - name: all_healthy
     description: "Baseline — both providers healthy"
     provider_overrides: {}
+  - name: cache_stale_candidate
+    description: "Low similarity threshold (0.3) — verifies false cache hits are rare"
+    provider_overrides: {}
+    cache_similarity_threshold: 0.3
