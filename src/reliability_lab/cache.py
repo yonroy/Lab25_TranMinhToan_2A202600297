@@ -42,11 +42,12 @@ class CacheEntry:
 
 
 class ResponseCache:
-    """Simple in-memory cache skeleton.
+    """In-memory LRU-style cache with TTL, character-trigram similarity, and false-hit guardrails.
 
-    TODO(student): Add a better semantic similarity function and false-hit guardrails.
-    Use the module-level _is_uncacheable() and _looks_like_false_hit() helpers in your
-    get() and set() methods.  For production, replace with SharedRedisCache.
+    - similarity(): exact-match fast path → character trigram Jaccard.
+    - get(): _is_uncacheable() guard, _looks_like_false_hit() check, hit_log tracking.
+    - set(): skips privacy-sensitive queries.
+    For multi-instance deployments use SharedRedisCache instead.
     """
 
     def __init__(self, ttl_seconds: int, similarity_threshold: float):
@@ -110,22 +111,18 @@ class ResponseCache:
 class SharedRedisCache:
     """Redis-backed shared cache for multi-instance deployments.
 
-    TODO(student): Implement the get() and set() methods using Redis commands
-    so that cache state is shared across multiple gateway instances.
+    Data model:
+        Key   = "{prefix}{query_hash}"  (MD5-12 of lowercased query)
+        Value = Redis Hash: {"query": ..., "response": ..., [provider: ...]}
+        TTL   = Redis EXPIRE (ttl_seconds) — automatic cleanup
 
-    Data model (suggested):
-        Key    = "{prefix}{query_hash}"   (Redis String namespace)
-        Value  = Redis Hash with fields:  "query", "response"
-        TTL    = Redis EXPIRE (automatic cleanup — no manual eviction)
+    Lookup strategy:
+        1. Exact match: hash(query) → HGET "response" (score 1.0, O(1))
+        2. Similarity scan: SCAN prefix* → HGET "query" → trigram Jaccard
+        3. Guards: _is_uncacheable() blocks privacy queries;
+           _looks_like_false_hit() blocks year/ID mismatches → false_hit_log
 
-    For similarity lookup: SCAN all keys with self.prefix, HGET each entry's
-    "query" field, compute similarity locally via ResponseCache.similarity().
-
-    Provided helpers:
-        _is_uncacheable(query)          — True if privacy-sensitive
-        _looks_like_false_hit(q, key)   — True if 4-digit numbers differ
-        self._query_hash(query)         — deterministic short hash for Redis key
-        ResponseCache.similarity(a, b)  — reuse your improved similarity function
+    Gracefully degrades to in-memory ResponseCache fallback when Redis is down.
     """
 
     def __init__(
