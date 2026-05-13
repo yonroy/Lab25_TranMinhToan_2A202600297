@@ -113,29 +113,29 @@ scenarios:
 
 ---
 
-## Phase 5 — Redis Shared Cache (165–210 min) · 15 điểm
+## Phase 5 — Redis Shared Cache (165–210 min) · 15 điểm ✅ DONE
 
 ### Setup
-- [ ] Chạy `make docker-up` → Redis trên `localhost:6379`
+- [x] `docker compose up -d` → Redis trên `localhost:6379`
 
 ### `cache.py` → `SharedRedisCache`
-- [ ] Implement `set()`: lưu query/response vào Redis Hash với TTL (`EXPIRE`)
-- [ ] Implement `get()`:
-  - [ ] Exact match: hash query → `HGET` trực tiếp
-  - [ ] Similarity scan: `scan_iter(prefix*)`, so sánh similarity từng entry
-  - [ ] Áp dụng privacy guardrails và false-hit detection
-- [ ] Xử lý Redis down gracefully (catch `ConnectionError`, fallback)
+- [x] `set()`: `_is_uncacheable()` guard, `hset(query+response+metadata)`, `expire(ttl)`
+- [x] `get()`:
+  - [x] Exact match: `_query_hash(query)` → `hget("response")` → return score 1.0
+  - [x] Similarity scan: `scan_iter(prefix*)` → `hget("query")` → `ResponseCache.similarity()`
+  - [x] Privacy guard: `_is_uncacheable()` ở đầu
+  - [x] False-hit: `_looks_like_false_hit()` → log vào `false_hit_log`, return None
+- [x] Redis down gracefully: `except Exception: return None, 0.0` / `pass`
 
-### Kiểm tra Redis
-- [ ] `make test` → tất cả 6 test trong `test_redis_cache.py` pass:
-  - [ ] Connection works
-  - [ ] Set + exact get trả về đúng giá trị (score 1.0)
-  - [ ] TTL expiry (entry mất sau TTL)
-  - [ ] Shared state: 2 instance `SharedRedisCache` thấy cùng data
-  - [ ] Privacy queries bỏ qua cache
-  - [ ] False-hit detection với queries khác năm
-- [ ] Chuyển config sang `backend: redis` → `make run-chaos`
-- [ ] Chạy `docker compose exec redis redis-cli KEYS "rl:cache:*"` → thấy keys
+### Kiểm tra Redis ✅ 13/13 tests passed
+- [x] `test_redis_connection` — pass
+- [x] `test_set_and_exact_get` — score 1.0
+- [x] `test_ttl_expiry` — entry mất sau 1s
+- [x] `test_shared_state_across_instances` — 2 instance thấy cùng data
+- [x] `test_privacy_query_not_cached` — "account balance for user 123" → None
+- [x] `test_false_hit_different_years` — 2024 vs 2026 → None, false_hit_log >= 1
+- [x] `backend: redis` → `run-chaos` → 5 pass / 1 intentional fail
+- [x] Redis CLI: `rl:cache:095946136fea`, `rl:cache:b2a52f7dc795`, `rl:cache:8baa2cfa11fa`, `rl:cache:9e413fd814eb`
 
 ---
 

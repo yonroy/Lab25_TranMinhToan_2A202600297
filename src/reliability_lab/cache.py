@@ -148,31 +148,55 @@ class SharedRedisCache:
             return False
 
     def get(self, query: str) -> tuple[str | None, float]:
-        """Look up a cached response from Redis.
+        """Look up a cached response from Redis."""
+        if _is_uncacheable(query):
+            return None, 0.0
+        try:
+            # 1. Exact-match fast path
+            exact_key = f"{self.prefix}{self._query_hash(query)}"
+            response = self._redis.hget(exact_key, "response")
+            if response is not None:
+                return response, 1.0
 
-        TODO(student): Implement cache lookup.  Suggested steps:
-        1. Return (None, 0.0) if _is_uncacheable(query)
-        2. Build exact-match key: f"{self.prefix}{self._query_hash(query)}"
-        3. Try self._redis.hget(key, "response") — if found return (response, 1.0)
-        4. Otherwise self._redis.scan_iter(f"{self.prefix}*") to iterate all cached keys
-        5. For each key, HGET "query" field and compute
-           ResponseCache.similarity(query, cached_query)
-        6. Track best match that is >= self.similarity_threshold
-        7. Before returning a match, check _looks_like_false_hit(); if true,
-           append to self.false_hit_log and return (None, best_score)
-        """
-        return None, 0.0
+            # 2. Similarity scan over all keys with this prefix
+            best_response: str | None = None
+            best_score = 0.0
+            best_cached_query: str | None = None
+            for key in self._redis.scan_iter(f"{self.prefix}*"):
+                cached_query = self._redis.hget(key, "query")
+                if cached_query is None:
+                    continue
+                score = ResponseCache.similarity(query, cached_query)
+                if score > best_score:
+                    best_score = score
+                    best_cached_query = cached_query
+                    best_response = self._redis.hget(key, "response")
+
+            if best_score >= self.similarity_threshold and best_cached_query is not None:
+                if _looks_like_false_hit(query, best_cached_query):
+                    self.false_hit_log.append(
+                        {"query": query, "cached_key": best_cached_query, "score": best_score}
+                    )
+                    return None, best_score
+                return best_response, best_score
+
+            return None, best_score
+        except Exception:
+            return None, 0.0
 
     def set(self, query: str, value: str, metadata: dict[str, str] | None = None) -> None:
-        """Store a response in Redis with TTL.
-
-        TODO(student): Implement cache storage.  Suggested steps:
-        1. Return immediately if _is_uncacheable(query)
-        2. Build key: f"{self.prefix}{self._query_hash(query)}"
-        3. self._redis.hset(key, mapping={"query": query, "response": value})
-        4. self._redis.expire(key, self.ttl_seconds)
-        """
-        pass
+        """Store a response in Redis with TTL."""
+        if _is_uncacheable(query):
+            return
+        try:
+            key = f"{self.prefix}{self._query_hash(query)}"
+            mapping: dict[str, str] = {"query": query, "response": value}
+            if metadata:
+                mapping.update(metadata)
+            self._redis.hset(key, mapping=mapping)
+            self._redis.expire(key, self.ttl_seconds)
+        except Exception:
+            pass
 
     def flush(self) -> None:
         """Remove all entries with this cache prefix (for testing)."""
