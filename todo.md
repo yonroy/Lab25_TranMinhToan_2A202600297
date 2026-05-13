@@ -139,40 +139,40 @@ scenarios:
 
 ---
 
-## Phase 6 — Load Test + Final Report (210–240 min) · 15 điểm
+## Phase 6 — Load Test + Final Report (210–240 min) · 15 điểm ✅ DONE
 
 ### Load Test
-- [ ] Tăng `load_test.requests` lên 200+ trong config
-- [ ] (Stretch) Thêm concurrency với `ThreadPoolExecutor`
-- [ ] Chạy dưới nhiều config khác nhau, ghi kết quả
+- [x] `load_test.requests: 200` — 1 200 total requests qua 6 scenarios
+- [x] `ThreadPoolExecutor(max_workers=10)` trong `run_scenario()` — concurrency stretch goal
+- [x] Metrics với 200 req/scenario: availability=99.42%, p95=490ms, cost_saved=0.749
 
-### `reports/final_report.md`
-- [ ] Copy từ `reports/report_template.md`
-- [ ] **Architecture summary**: 2–3 câu + sơ đồ text: `User → Gateway → [Cache] → [Circuit Breaker] → Provider A / B → [Static Fallback]`
-- [ ] **Configuration table**: mỗi param + giá trị + lý do
-- [ ] **Metrics table**: paste từ `metrics.json` (đủ tất cả fields)
-- [ ] **Chaos scenario table**: mỗi scenario — expected vs. observed — pass/fail
-- [ ] **Cache comparison**: bảng with/without cache
-- [ ] **Redis shared cache**: giải thích tại sao cần, bằng chứng 2 instance dùng chung, Redis CLI output
-- [ ] **Failure analysis**: 1 điểm yếu còn lại + cách khắc phục
-- [ ] **Next steps**: 2–3 cải tiến cụ thể
-
----
-
-## Code Quality (trước khi nộp)
-- [ ] `make typecheck` — type hints đầy đủ trong tất cả code đã viết
-- [ ] `make lint` — không lỗi lint
-- [ ] `make test` — 0 failures (xfail OK)
-- [ ] `make run-chaos` — `metrics.json` tái tạo được
+### `reports/final_report.md` ✅ đủ tất cả sections
+- [x] Architecture summary + ASCII diagram
+- [x] Configuration table (7 params + lý do)
+- [x] SLO definitions — 5/5 SLOs met
+- [x] Metrics table (đủ tất cả fields từ metrics.json)
+- [x] Cache comparison (p50: 0.05ms vs 225ms, cost: −83%)
+- [x] Redis shared cache: lý do + evidence + CLI output
+- [x] Chaos scenario table: 5 pass / 1 intentional fail
+- [x] Failure analysis: circuit breaker state không shared → Redis fix
+- [x] Next steps: Redis circuit state, asyncio, Prometheus
 
 ---
 
-## Deliverables cần nộp
-- [ ] Source code — tất cả TODOs hoàn thành trong `src/reliability_lab/`
-- [ ] `reports/metrics.json` — generated bởi `make run-chaos`
-- [ ] `reports/final_report.md` — đủ tất cả sections
-- [ ] Screenshot / log của `make test` passing (có Redis)
-- [ ] `docker-compose.yml` — đã có sẵn
+## Code Quality ✅
+- [x] `make typecheck` — 0 errors (fixed GatewayResponse/RunMetrics variable shadow)
+- [x] `make lint` — All checks passed (ruff)
+- [x] `make test` — 13/13 passed (0 failures, 0 xfailed)
+- [x] `make run-chaos` — metrics.json tái tạo được (1200 total_requests)
+
+---
+
+## Deliverables cần nộp ✅
+- [x] Source code — tất cả TODOs hoàn thành trong `src/reliability_lab/`
+- [x] `reports/metrics.json` — generated bởi `make run-chaos`
+- [x] `reports/final_report.md` — đủ tất cả sections
+- [x] `make test` log: 13 passed (Redis active)
+- [x] `docker-compose.yml` — đã có sẵn
 
 ---
 

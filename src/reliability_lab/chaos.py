@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import random
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from reliability_lab.cache import ResponseCache, SharedRedisCache
@@ -80,24 +82,32 @@ def run_scenario(config: LabConfig, queries: list[str], scenario: ScenarioConfig
     )
     metrics = RunMetrics()
     request_count = config.load_test.requests
-    for _ in range(request_count):
+    lock = threading.Lock()
+
+    def _execute(_: int) -> None:
         prompt = random.choice(queries)
         result = gateway.complete(prompt)
-        metrics.total_requests += 1
-        metrics.estimated_cost += result.estimated_cost
-        if result.cache_hit:
-            metrics.cache_hits += 1
-            metrics.estimated_cost_saved += 0.001
-        if result.route.startswith("fallback:"):
-            metrics.fallback_successes += 1
-            metrics.successful_requests += 1
-        elif result.route == "static_fallback":
-            metrics.static_fallbacks += 1
-            metrics.failed_requests += 1
-        else:
-            metrics.successful_requests += 1
-        if result.latency_ms:
-            metrics.latencies_ms.append(result.latency_ms)
+        with lock:
+            metrics.total_requests += 1
+            metrics.estimated_cost += result.estimated_cost
+            if result.cache_hit:
+                metrics.cache_hits += 1
+                metrics.estimated_cost_saved += 0.001
+            if result.route.startswith("fallback:"):
+                metrics.fallback_successes += 1
+                metrics.successful_requests += 1
+            elif result.route == "static_fallback":
+                metrics.static_fallbacks += 1
+                metrics.failed_requests += 1
+            else:
+                metrics.successful_requests += 1
+            if result.latency_ms:
+                metrics.latencies_ms.append(result.latency_ms)
+
+    max_workers = min(10, request_count)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for future in as_completed([executor.submit(_execute, i) for i in range(request_count)]):
+            future.result()
 
     metrics.circuit_open_count = sum(
         1 for breaker in gateway.breakers.values() for t in breaker.transition_log if t["to"] == "open"
@@ -145,19 +155,19 @@ def run_simulation(config: LabConfig, queries: list[str]) -> RunMetrics:
     cache_off_metrics = RunMetrics()
     for _ in range(config.load_test.requests):
         prompt = random.choice(queries)
-        result = cache_off_gateway.complete(prompt)
+        resp = cache_off_gateway.complete(prompt)
         cache_off_metrics.total_requests += 1
-        cache_off_metrics.estimated_cost += result.estimated_cost
-        if result.route.startswith("fallback:"):
+        cache_off_metrics.estimated_cost += resp.estimated_cost
+        if resp.route.startswith("fallback:"):
             cache_off_metrics.fallback_successes += 1
             cache_off_metrics.successful_requests += 1
-        elif result.route == "static_fallback":
+        elif resp.route == "static_fallback":
             cache_off_metrics.static_fallbacks += 1
             cache_off_metrics.failed_requests += 1
         else:
             cache_off_metrics.successful_requests += 1
-        if result.latency_ms:
-            cache_off_metrics.latencies_ms.append(result.latency_ms)
+        if resp.latency_ms:
+            cache_off_metrics.latencies_ms.append(resp.latency_ms)
     cache_off_metrics.circuit_open_count = sum(
         1 for b in cache_off_gateway.breakers.values() for t in b.transition_log if t["to"] == "open"
     )
